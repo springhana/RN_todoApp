@@ -5,113 +5,180 @@
  * @format
  */
 
-import React from 'react';
-import type {PropsWithChildren} from 'react';
+import React, {useState, useEffect} from 'react';
 import {
-  SafeAreaView,
-  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
-  useColorScheme,
   View,
+  TouchableOpacity,
+  TextInput,
+  ScrollView,
+  Alert,
 } from 'react-native';
+import {theme} from './color';
+import {getData, storeData} from './store/asyncStorage';
+import BouncyCheckbox from 'react-native-bouncy-checkbox';
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+const STORAGE_KEY = '@toDos';
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+function App(): React.JSX.Element {
+  const [value, setValue] = useState('');
+  const [working, setWorking] = useState(true);
+  const [toDos, setToDos] = useState<{
+    [key: string]: {value: string; working: boolean; completed: boolean};
+  }>({});
+  const [loading, setLoading] = useState(true);
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+  useEffect(() => {
+    loadToDos();
+  }, []);
+
+  const travel = () => setWorking(false);
+  const work = () => setWorking(true);
+  const onChangeText = (event: string) => setValue(event);
+
+  const saveToDos = async (toDos: {
+    [key: string]: {value: string; working: boolean; completed: boolean};
+  }) => {
+    await storeData(STORAGE_KEY, toDos);
+  };
+
+  const loadToDos = async () => {
+    const todos = await getData(STORAGE_KEY);
+    if (todos) {
+      setToDos(JSON.parse(todos));
+      setLoading(false);
+    }
+  };
+
+  const addToDo = async () => {
+    if (value === '') {
+      return;
+    }
+    // save to do
+    const newToDos = {
+      ...toDos,
+      [Date.now()]: {value, working, completed: false},
+    };
+
+    setToDos(newToDos);
+    await saveToDos(newToDos);
+    setValue('');
+    // const newToDos = Object.assign({}, toDos, {[Date.now()]: {value, working}});
+  };
+
+  const deleteToDo = (key: string) => {
+    // key 날짜
+    Alert.alert('Delete To Do', 'Are you sure?', [
+      {text: 'Cancel'},
+      {
+        text: "I'm Sure",
+        onPress: async () => {
+          const newToDos = {...toDos};
+          delete newToDos[key];
+          setToDos(newToDos);
+          await saveToDos(newToDos);
+        },
+      },
+    ]);
+  };
+
+  const completedToDo = async (key: string) => {
+    const newToDos = {...toDos};
+    newToDos[key].completed = !newToDos[key].completed;
+    setToDos(newToDos);
+    await saveToDos(newToDos);
+  };
+
   return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
+    <View style={styles.container}>
+      <StatusBar />
+      <View style={styles.header}>
+        <TouchableOpacity onPress={work}>
+          <Text
+            style={{...styles.btnText, color: working ? 'white' : theme.grey}}>
+            Work
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={travel}>
+          <Text
+            style={{...styles.btnText, color: working ? theme.grey : 'white'}}>
+            Travel
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <TextInput
+        onSubmitEditing={addToDo}
+        onChangeText={onChangeText}
+        value={value}
+        returnKeyType="done"
+        style={styles.input}
+        placeholder={working ? 'Add a To Do' : 'Where do you want to go?'}
+      />
+
+      <ScrollView>
+        {Object.keys(toDos).map((key: string) =>
+          toDos[key].working === working ? (
+            <View key={key} style={styles.toDo}>
+              <Text style={styles.toDoText}>{toDos[key].value}</Text>
+              <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                <BouncyCheckbox
+                  onPress={() => completedToDo(key)}
+                  isChecked={toDos[key].completed}
+                />
+                <TouchableOpacity onPress={() => deleteToDo(key)}>
+                  <Text>❌</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : null,
+        )}
+      </ScrollView>
     </View>
   );
 }
 
-function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
-  };
-
-  return (
-    <SafeAreaView style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
-      />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-
 const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
+  container: {
+    flex: 1,
+    backgroundColor: theme.bg,
+    paddingHorizontal: 20,
   },
-  sectionTitle: {
-    fontSize: 24,
+  header: {
+    justifyContent: 'space-between',
+    flexDirection: 'row',
+    marginTop: 100,
+  },
+
+  btnText: {
+    fontSize: 38,
     fontWeight: '600',
   },
-  sectionDescription: {
-    marginTop: 8,
+  input: {
+    backgroundColor: 'white',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    marginVertical: 20,
     fontSize: 18,
-    fontWeight: '400',
   },
-  highlight: {
-    fontWeight: '700',
+  toDo: {
+    backgroundColor: theme.toDoBg,
+    marginBottom: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  toDoText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
 
